@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema SGSTI - Inventra Solutions</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8fafc; font-family: 'Segoe UI', sans-serif; }
+        .header-bar { background: #1e293b; color: white; padding: 15px; border-bottom: 4px solid #0284c7; }
+        .card-custom { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: none; margin-bottom: 20px; }
+        .card-header-custom { background: #334155; color: white; font-weight: bold; border-top-left-radius: 12px; border-top-right-radius: 12px; padding: 12px; }
+        .chat-box { height: 420px; overflow-y: auto; background: #f1f5f9; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; }
+        .bubble { padding: 8px 12px; border-radius: 15px; margin-bottom: 8px; max-width: 85%; display: inline-block; }
+        .bubble.user { background: #0284c7; color: white; float: right; clear: both; }
+        .bubble.bot { background: #e2e8f0; color: #1e293b; float: left; clear: both; }
+        .badge-pendiente { background-color: #f97316; color: white; padding: 4px 8px; border-radius: 6px; font-size: 0.85rem; }
+        .product-item { background: #ffffff; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    </style>
+</head>
+<body>
+
+    <div class="header-bar d-flex justify-content-between align-items-center shadow-sm">
+        <div>
+            <h4 class="m-0">💻 Sistema SGSTI - Inventra Solutions</h4>
+            <small class="text-muted">Sistema de gestión de inventarios y tickets</small>
+        </div>
+        <div>
+            <span class="badge bg-secondary p-2">👤 Usuario: René</span>
+        </div>
+    </div>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            
+            <div class="col-md-7">
+                <div class="card card-custom">
+                    <div class="card-header-custom">📋 Catálogo de Servicios</div>
+                    <div class="card-body row text-center">
+                        <div class="col-6">💼 <b>Gestión de Inventarios</b><br><small class="text-muted">Registro, entradas y salidas</small></div>
+                        <div class="col-6">🎫 <b>Mesa de Ayuda</b><br><small class="text-muted">Gestión de incidentes/entregas</small></div>
+                    </div>
+                </div>
+
+                <div class="card card-custom">
+                    <div class="card-header-custom d-flex justify-content-between align-items-center">
+                        <span>📦 Inventario de Productos (Cloud Firebase)</span>
+                        <span class="badge bg-primary" id="countProductos">Total: 0</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="listaProductos"></div>
+                    </div>
+                </div>
+
+                <div class="card card-custom">
+                    <div class="card-header-custom d-flex justify-content-between align-items-center">
+                        <span>🎫 Tickets / Mesa de Ayuda (Cloud Firebase)</span>
+                        <span class="badge bg-primary" id="countTickets">Total: 0</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="listaTickets"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-5">
+                <div class="card card-custom sticky-top" style="top: 20px;">
+                    <div class="card-header-custom bg-dark text-center">🤖 Asistente Virtual Automatizado</div>
+                    <div class="card-body">
+                        <div class="chat-box mb-3" id="chatBox">
+                            <div class="bubble bot" id="saludoInicial"></div>
+                        </div>
+                        <div class="input-group">
+                            <input type="text" id="userInput" class="form-control" placeholder="Escribe 'hola' o un comando..." onkeypress="if(event.key === 'Enter') procesarChatbot()">
+                            <button class="btn btn-primary" onclick="procesarChatbot()">Enviar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const menuEjemplos = `<b>¡Hola! Soy tu asistente virtual de Inventra Solutions.</b> 🤖✨<br><br>` +
+                             `A continuación se mostrarán unos ejemplos de cómo son las funciones del chatbot para interactuar con el sistema:<br><br>` +
+                             `1️⃣ <b>Añadir un producto:</b><br>` +
+                             `<code>añadir: Cable HDMI, 5, 120</code><br><br>` +
+                             `2️⃣ <b>Registrar entrega (Mesa de Ayuda):</b><br>` +
+                             `<code>ticket: Aurrera de Santa Barbara, 5584708810, Gancho, 2</code><br><br>` +
+                             `⚙️ <i>Nota: Para eliminar cualquier registro del inventario o de la mesa de ayuda, utiliza directamente el botón del botecito (🗑️) integrado en cada tarjeta.</i>`;
+
+        document.getElementById("saludoInicial").innerHTML = menuEjemplos;
+
+        // CONSULTAR LA NUBE EN TIEMPO REAL
+        function consultarFirebaseCloud() {
+            // Cargar Productos
+            fetch('/get_inventario')
+            .then(res => res.json())
+            .then(res => {
+                if(res.success) {
+                    let containerProd = document.getElementById("listaProductos");
+                    containerProd.innerHTML = res.data.length === 0 ? '<p class="text-muted text-center my-2">No hay productos registrados.</p>' : '';
+                    res.data.forEach(p => {
+                        containerProd.innerHTML += `
+                            <div class="product-item">
+                                <div>
+                                    <h6 class="m-0 font-weight-bold">🛠️ ${p.nombre}</h6>
+                                    <small class="text-muted">Stock: ${p.cantidad} pzas | Costo/Precio: $${p.precio}</small>
+                                interactive</div>
+                                <button class="btn btn-sm btn-danger py-0 px-2" onclick="borrarProdCloud('${p.id}')">🗑️</button>
+                            </div>`;
+                    });
+                    document.getElementById("countProductos").innerText = `Total: ${res.data.length}`;
+                }
+            });
+
+            // Cargar Tickets
+            fetch('/get_tickets')
+            .then(res => res.json())
+            .then(res => {
+                if(res.success) {
+                    let containerTickets = document.getElementById("listaTickets");
+                    containerTickets.innerHTML = res.data.length === 0 ? '<p class="text-muted text-center my-2">No hay tickets registrados.</p>' : '';
+                    res.data.forEach(t => {
+                        containerTickets.innerHTML += `
+                            <div class="p-3 border rounded bg-light mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <strong class="text-primary">📦 Entrega en ${t.titulo}</strong>
+                                    <span class="badge-pendiente">${t.estado}</span>
+                                </div>
+                                <div class="small text-secondary">
+                                    <b>📞 Contacto:</b> ${t.telefono}<br>
+                                    <b>🛍️ Detalle:</b> ${t.cantidad_pedida} pzas de "${t.producto_nombre}"<br>
+                                    <b class="text-success">💰 Total del cobro: $${t.total_cobro}</b>
+                                </div>
+                                <button class="btn btn-sm btn-link text-danger p-0 mt-2 small text-decoration-none" onclick="borrarTicketCloud('${t.id}')">🗑️ Eliminar ticket</button>
+                            </div>`;
+                    });
+                    document.getElementById("countTickets").innerText = `Total: ${res.data.length}`;
+                }
+            });
+        }
+
+        function borrarProdCloud(id) {
+            fetch(`/eliminar_producto/${id}`, { method: 'DELETE' })
+            .then(() => consultarFirebaseCloud());
+        }
+
+        function borrarTicketCloud(id) {
+            fetch(`/eliminar_ticket/${id}`, { method: 'DELETE' })
+            .then(() => consultarFirebaseCloud());
+        }
+
+        function procesarChatbot() {
+            let input = document.getElementById("userInput");
+            let mensaje = input.value.trim();
+            if (mensaje === "") return;
+
+            let chatBox = document.getElementById("chatBox");
+            chatBox.innerHTML += `<div class="bubble user">${mensaje}</div>`;
+            input.value = "";
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            let mensajeMin = mensaje.toLowerCase();
+
+            if (mensajeMin === "hola" || mensajeMin === "buen dia" || mensajeMin === "buenos dias" || mensajeMin === "buenas tardes") {
+                setTimeout(() => {
+                    chatBox.innerHTML += `<div class="bubble bot">${menuEjemplos}</div>`;
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }, 400);
+                return;
+            }
+
+            fetch("/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: mensaje })
+            })
+            .then(res => res.json())
+            .then(data => {
+                chatBox.innerHTML += `<div class="bubble bot">${data.reply}</div>`;
+                chatBox.scrollTop = chatBox.scrollHeight;
+                consultarFirebaseCloud();
+            });
+        }
+
+        consultarFirebaseCloud();
+    </script>
+</body>
+</html>
